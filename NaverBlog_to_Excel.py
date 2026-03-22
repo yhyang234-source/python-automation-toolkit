@@ -186,12 +186,14 @@ def parse_chunk(chunk):
         if text == "<BR>":
             content_lines.append("\n")
             continue
-        if is_title_line(size, color):   continue  # 제목 제거
-        if is_blue(color):               continue  # 도서 모듈 제거
-        if color in (COLOR_GRAY1, COLOR_GRAY2): continue  # 회색 제거
-        if "©" in text or "unsplash" in text.lower() or text.strip().startswith("출처"):
+        if is_title_line(size, color):
             continue
-
+        if is_blue(color):
+            continue
+        if color in (COLOR_GRAY1, COLOR_GRAY2):
+            continue
+        if "©" in text or "unsplash" in text.lower() or "pixabay" in text.lower() or text.strip().startswith("출처"):
+            continue
         content_lines.append(text)
 
     raw = " ".join(content_lines)
