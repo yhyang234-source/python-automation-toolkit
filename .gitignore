@@ -6,3 +6,7 @@ venv/
 *.pdf
 *.csv
 *.txt
+*.hwp
+*.xlsx
+*.bat
+
