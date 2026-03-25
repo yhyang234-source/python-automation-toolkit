@@ -10,8 +10,9 @@ from pdfminer.layout import LTTextBox, LTTextLine, LTChar
 # 1. CONFIG
 # ==========================================
 CONFIG = {
-    "INPUT_DIR": ".",
-    "OUTPUT_PATH": "extracted_books_all.csv",
+    # 환경변수에서 값을 가져오되, 값이 없으면 기본값(".")을 사용하도록 방어 로직 추가
+    "INPUT_DIR": os.getenv("PDF_INPUT_DIR", "."),
+    "OUTPUT_PATH": os.getenv("CSV_OUTPUT_PATH", "extracted_books_all.csv"),
     "COLUMNS": ["블로그 제목", "책 이름", "책 저자", "블로그 날짜", "내용", "url"],
 }
 
