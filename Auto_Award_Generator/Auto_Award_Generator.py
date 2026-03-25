@@ -15,8 +15,26 @@ CONFIG = {
     "SHEET_NAME": "Sheet1",
     "TEMPLATE_FILE": "Award_Template.hwp",
     "OUTPUT_DIR": "결과물",
-    "HANGEUL_VISIBLE": True,
-    "MAX_PAGE_LIMIT": 1        
+    
+    "HANGEUL_VISIBLE": True,   
+    "MAX_PAGE_LIMIT": 1,       
+    "WAIT_SEC": 0.1,           
+    
+    "FILE_NAME_FORMAT": "{문서번호}_{부서}_{이름}_표창장.hwp",
+
+    "FIELD_MAPPING": {
+        "문서번호": "doc_no",
+        "표창명": "award_name",
+        "부서": "department",
+        "이름": "name",
+        "내용": "content",
+        "날짜": "award_date",
+        "대표이사명": "ceo"
+    },
+    
+    "STATUS_COL": "결과",
+    "MSG_SUCCESS": "성공",
+    "MSG_PARTIAL": "성공(일부누락)", 
 }
 
 # ==========================================
@@ -69,42 +87,62 @@ def main():
         print(f"❌ 엑셀 로드 에러: {e}")
         return
 
-    header = {cell.value: idx + 1 for idx, cell in enumerate(ws[1])}
+    # 1. 엑셀의 기존 헤더 읽기
+    header = {cell.value: idx + 1 for idx, cell in enumerate(ws[1]) if cell.value}
     
-    required_cols = ["문서번호", "부서", "이름", "표창명", "내용", "날짜", "대표이사명", "결과"]
-    for col in required_cols:
+    # 2. 필수 데이터 컬럼이 있는지 확인 (결과 컬럼은 제외하고 확인)
+    for col in CONFIG["FIELD_MAPPING"].keys():
         if col not in header:
             print(f"❌ 오류: 엑셀 첫 줄에 '{col}' 컬럼이 없습니다.")
             return
+
+    # 3. [핵심 업그레이드] 상태 기록 컬럼("결과") 자동 생성 로직
+    status_col_name = CONFIG["STATUS_COL"]
+    if status_col_name not in header:
+        new_col_idx = ws.max_column + 1 # 현재 사용 중인 마지막 칸의 바로 다음 칸 번호
+        ws.cell(row=1, column=new_col_idx).value = status_col_name # 첫 줄에 '결과'라고 쓰기
+        header[status_col_name] = new_col_idx # 프로그램 기억장치(header)에도 추가
+        print(f"💡 엑셀에 '{status_col_name}' 컬럼이 없어서 자동으로 생성했습니다.")
 
     print("⏳ 한글 프로그램을 실행 중입니다...")
     hwp = win32.gencache.EnsureDispatch("HWPFrame.HwpObject")
     hwp.XHwpWindows.Item(0).Visible = CONFIG["HANGEUL_VISIBLE"]
 
-    counts = {"success": 0, "fail": 0, "skip": 0}
+    counts = {"success": 0, "partial": 0, "fail": 0, "skip": 0}
 
     for row_idx in range(2, ws.max_row + 1):
-        status = str(ws.cell(row=row_idx, column=header["결과"]).value or "").strip()
-        if status == "성공":
+        status_col_idx = header[CONFIG["STATUS_COL"]]
+        status = str(ws.cell(row=row_idx, column=status_col_idx).value or "").strip()
+        
+        if status in [CONFIG["MSG_SUCCESS"], CONFIG["MSG_PARTIAL"]]:
             counts["skip"] += 1
             continue
 
-        doc_no = str(ws.cell(row=row_idx, column=header["문서번호"]).value or "").strip()
+        row_data = {}
+        is_partial = False 
         
-        # [핵심 변경] 문서번호가 비어있으면 데이터의 끝으로 간주하고 전체 반복 중단
-        if not doc_no:
+        for excel_col in CONFIG["FIELD_MAPPING"].keys():
+            raw_val = ws.cell(row=row_idx, column=header[excel_col]).value
+            if excel_col == "날짜":
+                clean_val = format_date(raw_val)
+            else:
+                clean_val = str(raw_val or "").strip()
+                
+            row_data[excel_col] = clean_val
+            
+            if not clean_val and excel_col not in ["문서번호", "부서", "이름", "표창명"]:
+                is_partial = True
+
+        if not row_data["문서번호"]:
             print(f"\n🛑 [알림] {row_idx}행에서 빈 문서번호를 발견했습니다. 작업을 종료합니다.")
             break 
 
-        dept = str(ws.cell(row=row_idx, column=header["부서"]).value or "").strip()
-        name = str(ws.cell(row=row_idx, column=header["이름"]).value or "").strip()
-        award = str(ws.cell(row=row_idx, column=header["표창명"]).value or "").strip()
-        content = str(ws.cell(row=row_idx, column=header["내용"]).value or "").strip()
-        ceo = str(ws.cell(row=row_idx, column=header["대표이사명"]).value or "").strip()
-        raw_date = ws.cell(row=row_idx, column=header["날짜"]).value
-        formatted_date = format_date(raw_date)
+        # --- 새로 들어갈 코드 (완전 자동화) ---
+        safe_row_data = {key: make_filename_safe(val) for key, val in row_data.items()}
+        file_name = CONFIG["FILE_NAME_FORMAT"].format(**safe_row_data)
+        # -------------------------------------
 
-        file_name = f"{make_filename_safe(doc_no)}_{make_filename_safe(dept)}_{make_filename_safe(name)}_표창장.hwp"
+        save_path = os.path.join(output_dir_path, file_name)
         save_path = os.path.join(output_dir_path, file_name)
 
         print(f"▶ 처리 중: {file_name}", end=" ... ")
@@ -113,14 +151,12 @@ def main():
             shutil.copy(template_path, save_path)
             hwp.Open(save_path, "HWP", "forceopen:true")
             
-            hwp.PutFieldText("doc_no", doc_no)
-            hwp.PutFieldText("name", name)
-            hwp.PutFieldText("department", dept)
-            hwp.PutFieldText("award_name", award)
-            
-            if content: hwp.PutFieldText("content", content)
-            if formatted_date: hwp.PutFieldText("award_date", formatted_date)
-            if ceo: hwp.PutFieldText("ceo", ceo)
+            for excel_col, hwp_field in CONFIG["FIELD_MAPPING"].items():
+                val = row_data[excel_col]
+                if val:  
+                    hwp.PutFieldText(hwp_field, val)
+
+            time.sleep(CONFIG["WAIT_SEC"]) 
 
             if hwp.PageCount > CONFIG["MAX_PAGE_LIMIT"]:
                 hwp.Clear(1)
@@ -129,19 +165,24 @@ def main():
 
             hwp.Save()
             hwp.Clear(1)
-            ws.cell(row=row_idx, column=header["결과"]).value = "성공"
-            counts["success"] += 1
-            print("✅")
+            
+            final_status = CONFIG["MSG_PARTIAL"] if is_partial else CONFIG["MSG_SUCCESS"]
+            ws.cell(row=row_idx, column=status_col_idx).value = final_status
+            
+            if is_partial: counts["partial"] += 1
+            else: counts["success"] += 1
+            
+            print(f"✅ {final_status}")
 
         except Exception as e:
-            ws.cell(row=row_idx, column=header["결과"]).value = f"실패({str(e)[:15]})"
+            ws.cell(row=row_idx, column=status_col_idx).value = f"실패({str(e)[:15]})"
             counts["fail"] += 1
             print(f"❌ ({e})")
 
     hwp.Quit()
     try:
         wb.save(excel_path)
-        print(f"\n🎉 완료! (성공:{counts['success']}, 실패:{counts['fail']}, 스킵:{counts['skip']})")
+        print(f"\n🎉 완료! (완벽성공:{counts['success']}, 일부누락성공:{counts['partial']}, 실패:{counts['fail']}, 스킵:{counts['skip']})")
     except:
         print("\n❌ 엑셀 저장 실패 (파일을 닫고 다시 실행하세요)")
 
