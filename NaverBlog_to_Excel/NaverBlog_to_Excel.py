@@ -9,10 +9,11 @@ from pdfminer.layout import LTTextBox, LTTextLine, LTChar
 # ==========================================
 # 1. CONFIG
 # ==========================================
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
 CONFIG = {
-    # 환경변수에서 값을 가져오되, 값이 없으면 기본값(".")을 사용하도록 방어 로직 추가
-    "INPUT_DIR": os.getenv("PDF_INPUT_DIR", "."),
-    "OUTPUT_PATH": os.getenv("CSV_OUTPUT_PATH", "extracted_books_all.csv"),
+    "INPUT_DIR": os.getenv("PDF_INPUT_DIR", os.path.join(_SCRIPT_DIR, "PDF_INPUT_DIR")),
+    "OUTPUT_PATH": os.getenv("CSV_OUTPUT_PATH", os.path.join(_SCRIPT_DIR, "extracted_books_all.csv")),
     "COLUMNS": ["블로그 제목", "책 이름", "책 저자", "블로그 날짜", "내용", "url"],
 }
 
@@ -42,6 +43,10 @@ def is_blue(color):
 
 def is_title_line(size, color):
     return size == TITLE_SIZE and color == COLOR_BLACK
+
+def remove_inline_duplicates(text):
+    # "문자열문자열" 패턴 제거 (3글자 이상)
+    return re.sub(r'(.{3,}?)\1', r'\1', text)
 
 
 # ==========================================
@@ -157,6 +162,7 @@ def extract_book_meta(blue_seq):
 def parse_chunk(chunk):
     book_info = {col: "" for col in CONFIG["COLUMNS"]}
     content_lines = []
+    
 
     # 블로그 제목: 첫 번째 size 18.8 텍스트
     for el in chunk:
@@ -166,7 +172,14 @@ def parse_chunk(chunk):
 
     # 책 이름 / 저자
     blue_seq = [el["text"] for el in chunk
-                if el["text"] != "<BR>" and is_blue(el["color"])]
+            if el["text"] != "<BR>" and is_blue(el["color"])]
+
+    blue_seq = [b for b in blue_seq
+            if "©" not in b
+            and "unsplash" not in b.lower()
+            and "pixabay" not in b.lower()
+            and not b.strip().startswith("출처")]
+
     book_info["책 이름"], book_info["책 저자"] = extract_book_meta(blue_seq)
 
     # URL / 날짜
@@ -198,7 +211,20 @@ def parse_chunk(chunk):
         content_lines.append(text)
 
     raw = " ".join(content_lines)
-    book_info["내용"] = re.sub(r'\s*\n\s*', '\n', raw).strip()
+
+    # 1. 불필요한 줄바꿈 제거 (문장 중간 끊김 복원)
+    text = re.sub(r'(?<!\n)\n(?!\n)', '', raw).strip()
+
+    # 2. * 구분자 앞에 줄바꿈 삽입
+    text = re.sub(r'\s*\*\s+', '\n* ', text)
+
+    # 3. 번호 목록 앞에 줄바꿈 삽입 (1. 2. 3. 형태)
+    text = re.sub(r'\s+(\d+\.)\s+', r'\n\1 ', text)
+
+    book_info["내용"] = re.sub(r'\n{2,}', '\n', text).strip()
+    book_info["내용"] = remove_inline_duplicates(book_info["내용"]) 
+
+
     return book_info
 
 
