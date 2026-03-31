@@ -11,8 +11,8 @@ logging.basicConfig(level=logging.INFO, format='%(message)s')
 # ==========================================
 CONFIG = {
     # '~' 기호가 실행하는 사람의 PC 홈 폴더로 자동 변환됩니다.
-    "BASE_DIR": os.path.expanduser(r"~\Desktop\UpNote_Backup_for_Obsidian\F5p9KpV016SPRSpBH6y3uJ8NcFm2\Markdown\Synapse OS"),
-    "OUTPUT_DIR": os.path.expanduser(r"~\Desktop\UpNote_Obsidian_Output"),
+    "BASE_DIR": os.path.expanduser(r"~\AppData\Roaming\UpNote\UpNote Backup\F5p9KpV016SPRSpBH6y3uJ8NcFm2\Markdown\Synapse OS"),
+    "OUTPUT_DIR": os.path.expanduser("C:\Obsidian\MyVault"),
 }
 
 # 파생 경로 자동 생성
