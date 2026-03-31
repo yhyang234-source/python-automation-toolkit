@@ -1,5 +1,3 @@
-__pycache__/
-*.pyc
 .env
 venv/
 .vscode/
@@ -10,3 +8,14 @@ venv/
 *.xlsx
 *.bat
 
+# 동기화 데이터 
+sync_map.json
+*.log
+
+# Python 캐시
+__pycache__/
+*.pyc
+ 
+
+ # py 파일 제외
+ csv_to_obsidian.py
