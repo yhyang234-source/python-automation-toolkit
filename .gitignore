@@ -18,4 +18,4 @@ __pycache__/
  
 
  # py 파일 제외
- csv_to_obsidian.py
+ **/csv_to_obsidian.py
